@@ -1,6 +1,6 @@
 import overlayStyles from "./overlay.css?inline";
 import {
-  POLICY_KEYWORDS,
+  POLICY_BROAD_WORDS,
   RISK_COLORS,
   STRIPPED_ELEMENTS,
   MAX_POLICY_TEXT_LENGTH,
@@ -26,36 +26,49 @@ if (
   });
 }
 
-// --- Step 1: Find T&C / Privacy Policy links on the page ---
+// --- Step 1: Collect and pre-filter links, then send to LLM for precise identification ---
 function scanForPolicies() {
-  const links = document.querySelectorAll("a[href]");
-  const policyLinks = [];
-
-  for (const link of links) {
-    const text = link.textContent.toLowerCase().trim();
-    const href = link.href;
-
-    // Skip empty, javascript:, or anchor-only links
-    if (!href || href.startsWith("javascript:") || href === "#") continue;
-
-    const match = POLICY_KEYWORDS.some(
-      (kw) => text.includes(kw) || href.toLowerCase().includes(kw.replace(/\s+/g, ""))
-    );
-
-    if (match && !policyLinks.some((p) => p.url === href)) {
-      policyLinks.push({ url: href, label: link.textContent.trim() });
+  const seen = new Set();
+  const candidateLinks = [];
+  for (const a of document.querySelectorAll("a[href]")) {
+    const href = a.href;
+    if (!href || href.startsWith("javascript:") || href.startsWith("#")) continue;
+    if (seen.has(href)) continue;
+    seen.add(href);
+    const label = a.textContent.trim();
+    const combined = (label + " " + href).toLowerCase();
+    if (POLICY_BROAD_WORDS.some((w) => combined.includes(w))) {
+      candidateLinks.push({ url: href, label: label || href });
     }
   }
+  if (candidateLinks.length === 0) return;
+  identifyAndAnalyze(candidateLinks);
+}
 
-  if (policyLinks.length === 0) return; // No policy links found, don't show overlay
-
-  analyzePolicies(policyLinks);
+// --- Step 1b: Ask LLM to filter out only policy links ---
+async function identifyAndAnalyze(allLinks) {
+  let host = null;
+  try {
+    const policyLinks = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { type: MSG.IDENTIFY_LINKS, links: allLinks, domain },
+        (res) => res?.success ? resolve(res.data) : reject(new Error(res?.error || "Failed to identify links"))
+      );
+    });
+    if (!policyLinks || policyLinks.length === 0) return; // no policy links — stay silent
+    host = createOverlayHost();
+    showLoading(host);
+    await analyzePolicies(policyLinks, host);
+  } catch (err) {
+    console.error("Terms Guardian: Error identifying policy links:", err);
+    if (host) showError(host);
+  }
 }
 
 // --- Step 2: Fetch policy pages and extract text ---
-async function analyzePolicies(policyLinks) {
-  const host = createOverlayHost();
-  showLoading(host);
+async function analyzePolicies(policyLinks, existingHost = null) {
+  const host = existingHost ?? createOverlayHost();
+  if (!existingHost) showLoading(host);
 
   try {
     const policyTexts = await Promise.all(
@@ -91,7 +104,8 @@ async function analyzePolicies(policyLinks) {
       .join("\n\n---\n\n");
 
     const response = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: MSG.SUMMARIZE, content: combined }, (res) => {
+      const links = validPolicies.map((p) => ({ label: p.label, url: p.url }));
+      chrome.runtime.sendMessage({ type: MSG.SUMMARIZE, content: combined, domain, links }, (res) => {
         if (res?.success) resolve(res.data);
         else reject(new Error(res?.error || "Backend request failed"));
       });

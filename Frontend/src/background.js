@@ -28,11 +28,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === MSG.IDENTIFY_LINKS) {
+    const domain = message.domain || (sender.tab?.url ? new URL(sender.tab.url).hostname : null);
+    fetch(`${import.meta.env.VITE_API_URL}/identify-links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ links: message.links, domain }),
+    })
+      .then((res) => res.json())
+      .then((data) => sendResponse({ success: true, data: data.links }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
   if (message.type === MSG.SUMMARIZE) {
+    const domain = message.domain || (sender.tab?.url ? new URL(sender.tab.url).hostname : null);
     fetch(`${import.meta.env.VITE_API_URL}/summarize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: message.content }),
+      body: JSON.stringify({ content: message.content, domain, links: message.links }),
     })
       .then((res) => res.json())
       .then((data) => sendResponse({ success: true, data }))

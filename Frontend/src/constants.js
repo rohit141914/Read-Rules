@@ -1,13 +1,9 @@
-// Policy detection keywords
-export const POLICY_KEYWORDS = [
-  "terms of service",
-  "terms and conditions",
-  "terms of use",
-  "privacy policy",
-  "privacy notice",
-  "cookie policy",
-  "legal notice",
-  "data policy",
+// Broad single-word pre-filter — used to reduce all page links before sending to LLM
+// Catches hyphenated, underscored, and abbreviated forms in both label and URL
+export const POLICY_BROAD_WORDS = [
+  "privacy", "terms", "legal", "cookie", "policy", "policies",
+  "notice", "agreement", "consent", "conditions", "eula", "gdpr",
+  "data-protection", "imprint", "impressum",
 ];
 
 // Risk level color mapping
@@ -22,8 +18,8 @@ export const RISK_COLORS = {
 export const STRIPPED_ELEMENTS = "script, style, nav, footer, header, iframe, noscript";
 
 // Limits
-export const MAX_POLICY_TEXT_LENGTH = 5000;
-export const MAX_POLICIES_TO_FETCH = 3;
+export const MAX_POLICY_TEXT_LENGTH = 3000;
+export const MAX_POLICIES_TO_FETCH = 10;
 
 // Message types (shared between background, popup, and content script)
 export const MSG = {
@@ -31,4 +27,5 @@ export const MSG = {
   RESET_DOMAIN: "RESET_DOMAIN",
   RESET_ALL_DOMAINS: "RESET_ALL_DOMAINS",
   SUMMARIZE: "SUMMARIZE",
+  IDENTIFY_LINKS: "IDENTIFY_LINKS",
 };
