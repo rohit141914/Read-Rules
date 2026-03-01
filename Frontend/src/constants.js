@@ -18,7 +18,7 @@ export const RISK_COLORS = {
 export const STRIPPED_ELEMENTS = "script, style, nav, footer, header, iframe, noscript";
 
 // Limits
-export const MAX_POLICY_TEXT_LENGTH = 3000;
+export const MAX_POLICY_TEXT_LENGTH = 15000;
 export const MAX_POLICIES_TO_FETCH = 10;
 
 // Message types (shared between background, popup, and content script)

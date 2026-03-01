@@ -35,7 +35,7 @@ function scanForPolicies() {
     if (!href || href.startsWith("javascript:") || href.startsWith("#")) continue;
     if (seen.has(href)) continue;
     seen.add(href);
-    const label = a.textContent.trim();
+    const label = a.textContent.replace(/\s+/g, " ").trim();
     const combined = (label + " " + href).toLowerCase();
     if (POLICY_BROAD_WORDS.some((w) => combined.includes(w))) {
       candidateLinks.push({ url: href, label: label || href });
@@ -84,9 +84,10 @@ async function analyzePolicies(policyLinks, existingHost = null) {
             .querySelectorAll(STRIPPED_ELEMENTS)
             .forEach((el) => el.remove());
 
-          const text = doc.body?.innerText?.trim() || "";
+          const text = (doc.body?.innerText || "").replace(/\s+/g, " ").trim();
           return { label: link.label, url: link.url, text: text.slice(0, MAX_POLICY_TEXT_LENGTH) };
-        } catch {
+        } catch (err) {
+          console.warn("Terms Guardian: Failed to fetch policy page:", link.url, err.message);
           return null;
         }
       })
