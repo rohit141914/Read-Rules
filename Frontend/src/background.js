@@ -28,6 +28,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === MSG.FETCH_POLICY_PAGES) {
+    // Only fetch HTML here — DOMParser is not available in service workers
+    Promise.all(
+      message.links.map(async (link) => {
+        try {
+          const res = await fetch(link.url);
+          const html = await res.text();
+          return { label: link.label, url: link.url, html };
+        } catch {
+          return null;
+        }
+      })
+    )
+      .then((results) => sendResponse({ success: true, data: results }))
+      .catch((err) => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
   if (message.type === MSG.IDENTIFY_LINKS) {
     const domain = message.domain || (sender.tab?.url ? new URL(sender.tab.url).hostname : null);
     fetch(`${import.meta.env.VITE_API_URL}/identify-links`, {

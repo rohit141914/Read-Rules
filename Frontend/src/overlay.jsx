@@ -65,33 +65,29 @@ async function identifyAndAnalyze(allLinks) {
   }
 }
 
-// --- Step 2: Fetch policy pages and extract text ---
+// --- Step 2: Fetch policy pages and extract text (via background to bypass CORS) ---
 async function analyzePolicies(policyLinks, existingHost = null) {
   const host = existingHost ?? createOverlayHost();
   if (!existingHost) showLoading(host);
 
   try {
-    const policyTexts = await Promise.all(
-      policyLinks.slice(0, MAX_POLICIES_TO_FETCH).map(async (link) => {
-        try {
-          const res = await fetch(link.url);
-          const html = await res.text();
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, "text/html");
+    const linksToFetch = policyLinks.slice(0, MAX_POLICIES_TO_FETCH);
+    const fetchedPages = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { type: MSG.FETCH_POLICY_PAGES, links: linksToFetch },
+        (res) => res?.success ? resolve(res.data) : reject(new Error(res?.error || "Failed to fetch policy pages"))
+      );
+    });
 
-          // Remove scripts, styles, navs, footers to get clean text
-          doc
-            .querySelectorAll(STRIPPED_ELEMENTS)
-            .forEach((el) => el.remove());
-
-          const text = (doc.body?.innerText || "").replace(/\s+/g, " ").trim();
-          return { label: link.label, url: link.url, text: text.slice(0, MAX_POLICY_TEXT_LENGTH) };
-        } catch (err) {
-          console.warn("Terms Guardian: Failed to fetch policy page:", link.url, err.message);
-          return null;
-        }
-      })
-    );
+    // Parse HTML here — DOMParser is available in content scripts but not in service workers
+    const policyTexts = (fetchedPages || []).map((page) => {
+      if (!page) return null;
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(page.html, "text/html");
+      doc.querySelectorAll(STRIPPED_ELEMENTS).forEach((el) => el.remove());
+      const text = (doc.body?.textContent || "").replace(/\s+/g, " ").trim();
+      return { label: page.label, url: page.url, text: text.slice(0, MAX_POLICY_TEXT_LENGTH) };
+    });
 
     const validPolicies = policyTexts.filter(Boolean);
     if (validPolicies.length === 0) {
