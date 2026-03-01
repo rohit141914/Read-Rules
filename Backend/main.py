@@ -30,7 +30,7 @@ app = FastAPI(title="Read Rules API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["chrome-extension://*"],
-    allow_methods=["POST"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
 
@@ -42,6 +42,11 @@ IDENTIFY_PROMPT = (
     "Respond with a JSON object: {\"links\": [{\"label\": \"...\", \"url\": \"...\"}]}\n"
     "If none are relevant, return {\"links\": []}."
 )
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 @app.post("/identify-links", response_model=IdentifyLinksResponse)
