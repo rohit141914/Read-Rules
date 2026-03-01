@@ -103,8 +103,17 @@
   letter-spacing: 0.5px;
 }
 
+.tg-clause-label {
+  margin: 8px 0 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
 .tg-clause-text {
-  margin: 4px 0 2px;
+  margin: 2px 0 2px;
   line-height: 1.5;
   color: #1e293b;
 }
