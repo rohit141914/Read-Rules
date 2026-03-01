@@ -12,22 +12,22 @@ def init_db(mongo_uri: str, db_name: str) -> None:
     _collection = client[db_name]["summaries"]
 
 
-async def db_get(cache_key: str) -> dict | None:
-    doc = await _collection.find_one({"_id": cache_key})
-    return doc["result"] if doc else None
+async def db_get(domain: str) -> dict | None:
+    return await _collection.find_one({"domain": domain})
 
 
-async def db_set(cache_key: str, result: dict, domain: str | None = None, links: list | None = None) -> None:
-    doc = {
-        "result": result,
-        "saved_at": datetime.now(timezone.utc),
-    }
-    if domain:
-        doc["domain"] = domain
+async def db_set(domain: str, result: dict, links: list | None = None, content_hash: str | None = None) -> None:
+    now = datetime.now(timezone.utc)
+    set_fields = {"result": result, "last_updated_at": now}
     if links:
-        doc["links"] = links
+        set_fields["links"] = links
+    if content_hash:
+        set_fields["content_hash"] = content_hash
     await _collection.update_one(
-        {"_id": cache_key},
-        {"$set": doc},
+        {"domain": domain},
+        {
+            "$set": set_fields,
+            "$setOnInsert": {"created_at": now},
+        },
         upsert=True,
     )

@@ -66,20 +66,25 @@ async def summarize(req: SummarizeRequest):
     content_preview = req.content[:100].replace("\n", " ")
     logger.info(">>> Request received | domain=%s | %d chars | '%s...'", req.domain, content_len, content_preview)
 
-    cache_key = hashlib.sha256(req.content.encode()).hexdigest()
+    content_hash = hashlib.sha256(req.content.encode()).hexdigest()
 
-    # 1. Check in-memory cache
-    cached = cache.get(cache_key)
+    # 1. Check in-memory cache (keyed by content hash — auto-invalidates when policy changes)
+    cached = cache.get(content_hash)
     if cached:
-        logger.info("<<< Cache hit (memory) for %s", cache_key[:12])
+        logger.info("<<< Cache hit (memory) for %s", req.domain or content_hash)
         return cached
 
-    # 2. Check MongoDB
-    db_result = await db_get(cache_key)
-    if db_result:
-        logger.info("<<< Cache hit (database) for %s | populating memory cache", cache_key[:12])
-        cache.set(cache_key, db_result)
-        return db_result
+    # 2. Check MongoDB (keyed by domain — skipped if domain is unknown)
+    if req.domain:
+        db_doc = await db_get(req.domain)
+        if db_doc:
+            stored_hash = db_doc.get("content_hash")
+            if stored_hash == content_hash:
+                logger.info("<<< Cache hit (database) for %s | populating memory cache", req.domain)
+                result = db_doc["result"]
+                cache.set(content_hash, result)
+                return result
+            logger.info("--- Policy changed for %s | re-analyzing...", req.domain)
 
     # 3. Call LLM
     logger.info("--- Sending to %s (%s)...", settings.llm_provider, settings.llm_model)
@@ -121,15 +126,16 @@ async def summarize(req: SummarizeRequest):
     )
 
     # Store in MongoDB and memory cache
-    await db_set(cache_key, result, domain=req.domain, links=[l.model_dump() for l in req.links])
-    cache.set(cache_key, result)
+    if req.domain:
+        await db_set(req.domain, result, links=[l.model_dump() for l in req.links], content_hash=content_hash)
+    cache.set(content_hash, result)
 
     clause_count = len(result.get("clauses", []))
     logger.info(
         "<<< Done | risk=%s | %d clauses | saved to DB + memory cache as %s",
         result["risk_level"],
         clause_count,
-        cache_key[:12],
+        req.domain or content_hash,
     )
 
     return result
